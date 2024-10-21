@@ -57,7 +57,8 @@ perf::Group::open(const perf::Config config)
     if (counter.is_open()) {
       ::ioctl(static_cast<std::int32_t>(file_descriptor), PERF_EVENT_IOC_ID, &counter.id());
     } else {
-      throw std::runtime_error{ "Cannot create file descriptor for counter." };
+      throw std::runtime_error{ "Cannot create file descriptor for counter (id: " + std::to_string(counter.id()) +
+                                ")." };
     }
 
     /// Set the leader file descriptor.
