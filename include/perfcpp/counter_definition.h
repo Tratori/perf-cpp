@@ -42,7 +42,7 @@ public:
 
   void add(std::unique_ptr<Metric>&& metric) { _metrics.insert(std::make_pair(metric->name(), std::move(metric))); }
 
-  void perf::CounterDefinition::clear_counter_configuration()
+  void clear_counter_configuration()
   {
     this->_counter_configs.clear();
     this->_metrics.clear();
