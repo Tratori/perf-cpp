@@ -42,6 +42,12 @@ public:
 
   void add(std::unique_ptr<Metric>&& metric) { _metrics.insert(std::make_pair(metric->name(), std::move(metric))); }
 
+  void perf::CounterDefinition::clear_counter_configuration()
+  {
+    this->_counter_configs.clear();
+    this->_metrics.clear();
+  }
+
   [[nodiscard]] std::optional<std::pair<std::string_view, CounterConfig>> counter(std::string&& name) const noexcept
   {
     return counter(name);
