@@ -3,6 +3,7 @@
 #include "branch.h"
 #include "precision.h"
 #include "registers.h"
+#include "period.h"
 #include <cstdint>
 #include <optional>
 
@@ -18,8 +19,8 @@ public:
   [[nodiscard]] std::uint8_t max_groups() const noexcept { return _max_groups; }
   [[nodiscard]] std::uint8_t max_counters_per_group() const noexcept { return _max_counters_per_group; }
 
-  [[deprecated("Will be replaced by Sampler::values() interface.")]] [[nodiscard]] std::uint16_t max_stack()
-    const noexcept
+  [[deprecated("Will be replaced by Sampler::values() interface from v.0.9.0.")]] [[nodiscard]] std::uint16_t
+  max_stack() const noexcept
   {
     return _max_stack;
   }
@@ -90,8 +91,7 @@ public:
 
   [[nodiscard]] Precision precise_ip() const noexcept { return _precise_ip; }
   [[nodiscard]] std::uint64_t buffer_pages() const noexcept { return _buffer_pages; }
-  [[nodiscard]] std::uint64_t frequency_or_period() const noexcept { return _frequency_or_period; }
-  [[nodiscard]] bool is_frequency() const noexcept { return _is_frequency; }
+  [[nodiscard]] PeriodOrFrequency period_for_frequency() const noexcept { return _period_or_frequency; }
 
   [[deprecated("User Registers will be set through the Sampler::values() interface.")]] [[nodiscard]] Registers
   user_registers() const noexcept
@@ -105,17 +105,19 @@ public:
     return _kernel_registers;
   }
 
-  [[nodiscard]] std::uint64_t branch_type() const noexcept { return _branch_type; }
+  [[deprecated("Kernel Registers will be set through the Sampler::values() interface.")]] [[nodiscard]] std::uint64_t
+  branch_type() const noexcept
+  {
+    return _branch_type;
+  }
 
   void frequency(const std::uint64_t frequency) noexcept
   {
-    _is_frequency = true;
-    _frequency_or_period = frequency;
+    _period_or_frequency = Frequency{frequency};
   }
   void period(const std::uint64_t period) noexcept
   {
-    _is_frequency = false;
-    _frequency_or_period = period;
+    _period_or_frequency = Period{period};
   }
 
   void precise_ip(const Precision precision) noexcept { _precise_ip = precision; }
@@ -137,24 +139,24 @@ public:
     }
   }
   void buffer_pages(const std::uint64_t buffer_pages) noexcept { _buffer_pages = buffer_pages; }
-  [[deprecated("User Registers will be set through the Sampler::values() interface.")]] void user_registers(
-    const Registers registers) noexcept
+  [[deprecated("User Registers will be set through the Sampler::values() interface from v.0.9.0.")]] void
+  user_registers(const Registers registers) noexcept
   {
     _user_registers = registers;
   }
-  [[deprecated("Kernel Registers will be set through the Sampler::values() interface.")]] void kernel_registers(
-    const Registers registers) noexcept
+  [[deprecated("Kernel Registers will be set through the Sampler::values() interface from v.0.9.0.")]] void
+  kernel_registers(const Registers registers) noexcept
   {
     _kernel_registers = registers;
   }
 
-  [[deprecated("Branch types will be set through the Sampler::values() interface.")]] void branch_type(
+  [[deprecated("Branch types will be set through the Sampler::values() interface from v.0.9.0.")]] void branch_type(
     const std::uint64_t branch_type) noexcept
   {
     _branch_type = branch_type;
   }
 
-  [[deprecated("Branch types will be set through the Sampler::values() interface.")]] void branch_type(
+  [[deprecated("Branch types will be set through the Sampler::values() interface from v.0.9.0.")]] void branch_type(
     const BranchType branch_type) noexcept
   {
     _branch_type = static_cast<std::uint64_t>(branch_type);
@@ -163,10 +165,9 @@ public:
 private:
   std::uint64_t _buffer_pages{ 8192U + 1U };
 
-  bool _is_frequency{ true };
-  std::uint64_t _frequency_or_period{ 4000U };
+  PeriodOrFrequency _period_or_frequency{ Period{4000U} };
 
-  Precision _precise_ip{ Precision::AllowArbitrarySkid };
+  Precision _precise_ip{ Precision::MustHaveConstantSkid /* Enable PEBS by default */ };
 
   /// User registers in config is deprecated and will be replaced by Sampler::values() interface.
   Registers _user_registers;

@@ -2,12 +2,14 @@
 
 #include "config.h"
 #include "counter_definition.h"
+#include "feature.h"
 #include "group.h"
 #include "sample.h"
 #include <chrono>
 #include <functional>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace perf {
@@ -22,41 +24,46 @@ public:
   /**
    * What to sample.
    */
-  enum [[deprecated("Sampler::Type will be replaced by Sampler::values() interface.")]] Type : std::uint64_t{
-    InstructionPointer = PERF_SAMPLE_IP,
-    ThreadId = PERF_SAMPLE_TID,
-    Time = PERF_SAMPLE_TIME,
-    LogicalMemAddress = PERF_SAMPLE_ADDR,
-    CounterValues = PERF_SAMPLE_READ,
-    Callchain = PERF_SAMPLE_CALLCHAIN,
-    CPU = PERF_SAMPLE_CPU,
-    Period = PERF_SAMPLE_PERIOD,
-    BranchStack = PERF_SAMPLE_BRANCH_STACK,
-    UserRegisters = PERF_SAMPLE_REGS_USER,
-    Weight = PERF_SAMPLE_WEIGHT,
-    DataSource = PERF_SAMPLE_DATA_SRC,
-    Identifier = PERF_SAMPLE_IDENTIFIER,
-    KernelRegisters = PERF_SAMPLE_REGS_INTR,
-    PhysicalMemAddress = PERF_SAMPLE_PHYS_ADDR,
-
-#ifndef NO_PERF_SAMPLE_DATA_PAGE_SIZE /// PERF_SAMPLE_DATA_PAGE_SIZE is provided since Linux Kernel 5.11
-    DataPageSize = PERF_SAMPLE_DATA_PAGE_SIZE,
+  enum
+    [[deprecated("Sampler::Type will be replaced by Sampler::values() interface from v.0.9.0.")]] Type : std::uint64_t{
+      InstructionPointer = PERF_SAMPLE_IP,
+      ThreadId = PERF_SAMPLE_TID,
+      Time = PERF_SAMPLE_TIME,
+      LogicalMemAddress = PERF_SAMPLE_ADDR,
+      CounterValues = PERF_SAMPLE_READ,
+      Callchain = PERF_SAMPLE_CALLCHAIN,
+      CPU = PERF_SAMPLE_CPU,
+      Period = PERF_SAMPLE_PERIOD,
+      BranchStack = PERF_SAMPLE_BRANCH_STACK,
+      UserRegisters = PERF_SAMPLE_REGS_USER,
+      Weight = PERF_SAMPLE_WEIGHT,
+      DataSource = PERF_SAMPLE_DATA_SRC,
+      Identifier = PERF_SAMPLE_IDENTIFIER,
+      KernelRegisters = PERF_SAMPLE_REGS_INTR,
+#ifndef PERFCPP_NO_SAMPLE_PHYS_ADDR
+      PhysicalMemAddress = PERF_SAMPLE_PHYS_ADDR,
 #else
-    DataPageSize = std::uint64_t(1U) << 63,
+      PhysicalMemAddress = std::uint64_t(1U) << 63,
 #endif
 
-#ifndef NO_PERF_SAMPLE_CODE_PAGE_SIZE /// PERF_SAMPLE_CODE_PAGE_SIZE is provided since Linux Kernel 5.11
-    CodePageSize = PERF_SAMPLE_CODE_PAGE_SIZE,
+#ifndef PERFCPP_NO_SAMPLE_DATA_PAGE_SIZE /// PERF_SAMPLE_DATA_PAGE_SIZE is provided since Linux Kernel 5.11
+      DataPageSize = PERF_SAMPLE_DATA_PAGE_SIZE,
 #else
-    CodePageSize = std::uint64_t(1U) << 63,
+      DataPageSize = std::uint64_t(1U) << 63,
 #endif
 
-#ifndef NO_PERF_SAMPLE_WEIGHT_STRUCT /// PERF_SAMPLE_WEIGHT_STRUCT is provided since Linux Kernel 5.12
-    WeightStruct = PERF_SAMPLE_WEIGHT_STRUCT
+#ifndef PERFCPP_NO_SAMPLE_CODE_PAGE_SIZE /// PERF_SAMPLE_CODE_PAGE_SIZE is provided since Linux Kernel 5.11
+      CodePageSize = PERF_SAMPLE_CODE_PAGE_SIZE,
 #else
-    WeightStruct = std::uint64_t(1U) << 63,
+      CodePageSize = std::uint64_t(1U) << 63,
 #endif
-  };
+
+#ifndef PERFCPP_NO_SAMPLE_WEIGHT_STRUCT /// PERF_SAMPLE_WEIGHT_STRUCT is provided since Linux Kernel 5.12
+      WeightStruct = PERF_SAMPLE_WEIGHT_STRUCT
+#else
+      WeightStruct = std::uint64_t(1U) << 63,
+#endif
+    };
 
   class Values
   {
@@ -86,6 +93,18 @@ public:
     Values& logical_memory_address(const bool include) noexcept
     {
       set(PERF_SAMPLE_ADDR, include);
+      return *this;
+    }
+
+    Values& stream_id(const bool include) noexcept
+    {
+      set(PERF_SAMPLE_STREAM_ID, include);
+      return *this;
+    }
+
+    Values& raw(const bool include) noexcept
+    {
+      set(PERF_SAMPLE_RAW, include);
       return *this;
     }
 
@@ -166,13 +185,23 @@ public:
 
     Values& physical_memory_address(const bool include) noexcept
     {
+#ifndef PERFCPP_NO_SAMPLE_PHYS_ADDR
       set(PERF_SAMPLE_PHYS_ADDR, include);
+#endif
+      return *this;
+    }
+
+    Values& cgroup(const bool include) noexcept
+    {
+#ifndef PERFCPP_NO_SAMPLE_CGROUP
+      set(PERF_SAMPLE_CGROUP, include);
+#endif
       return *this;
     }
 
     Values& data_page_size([[maybe_unused]] const bool include) noexcept
     {
-#ifndef NO_PERF_SAMPLE_DATA_PAGE_SIZE
+#ifndef PERFCPP_NO_SAMPLE_DATA_PAGE_SIZE
       set(PERF_SAMPLE_DATA_PAGE_SIZE, include);
 #endif
       return *this;
@@ -180,7 +209,7 @@ public:
 
     Values& code_page_size([[maybe_unused]] const bool include) noexcept
     {
-#ifndef NO_PERF_SAMPLE_CODE_PAGE_SIZE
+#ifndef PERFCPP_NO_SAMPLE_CODE_PAGE_SIZE
       set(PERF_SAMPLE_CODE_PAGE_SIZE, include);
 #endif
       return *this;
@@ -188,9 +217,21 @@ public:
 
     Values& weight_struct([[maybe_unused]] const bool include) noexcept
     {
-#ifndef NO_PERF_SAMPLE_WEIGHT_STRUCT
+#ifndef PERFCPP_NO_SAMPLE_WEIGHT_STRUCT
       set(PERF_SAMPLE_WEIGHT_STRUCT, include);
 #endif
+      return *this;
+    }
+
+    Values& context_switch(const bool include) noexcept
+    {
+      _is_include_context_switch = include;
+      return *this;
+    }
+
+    Values& throttle(const bool include) noexcept
+    {
+      _is_include_throttle = include;
       return *this;
     }
 
@@ -216,6 +257,9 @@ public:
 
     std::uint16_t _max_call_stack{ 0U };
 
+    bool _is_include_context_switch{ false };
+    bool _is_include_throttle{ false };
+
     void set(const std::uint64_t perf_field, const bool is_enabled) noexcept
     {
       if (is_enabled) {
@@ -228,6 +272,41 @@ public:
     void enable(const std::uint64_t perf_field) noexcept { _mask |= perf_field; }
 
     void disable(const std::uint64_t perf_field) noexcept { _mask &= ~perf_field; }
+  };
+
+  class Trigger
+  {
+  public:
+    explicit Trigger(std::string&& name) noexcept
+      : _name(std::move(name))
+    {
+    }
+    Trigger(std::string&& name, const Precision precision) noexcept
+      : _name(std::move(name))
+      , _precision(precision)
+    {
+    }
+    Trigger(std::string&& name, const PeriodOrFrequency period_or_frequency) noexcept
+      : _name(std::move(name))
+      , _period_or_frequency(period_or_frequency)
+    {
+    }
+    Trigger(std::string&& name, const Precision precision, const PeriodOrFrequency period_or_frequency) noexcept
+      : _name(std::move(name))
+      , _precision(precision)
+      , _period_or_frequency(period_or_frequency)
+    {
+    }
+    ~Trigger() = default;
+
+    [[nodiscard]] const std::string& name() const noexcept { return _name; }
+    [[nodiscard]] std::optional<Precision> precision() const noexcept { return _precision; }
+    [[nodiscard]] std::optional<PeriodOrFrequency> period_or_frequency() const noexcept { return _period_or_frequency; }
+
+  private:
+    std::string _name;
+    std::optional<Precision> _precision{ std::nullopt };
+    std::optional<PeriodOrFrequency> _period_or_frequency{ std::nullopt };
   };
 
   [[deprecated("Creating samplers with counters and sampling type will be replaced by Sampler::trigger() and "
@@ -269,13 +348,78 @@ public:
    * Set the trigger for sampling to a single counter.
    *
    * @param trigger_name Name of the counter that "triggers" sample recording.
+   * @return Sampler
+   */
+  Sampler& trigger(std::string&& trigger_name)
+  {
+    return trigger(std::vector<std::vector<Trigger>>{ std::vector<Trigger>{ Trigger{ std::move(trigger_name) } } });
+  }
+
+  /**
+   * Set the trigger for sampling to a single counter.
+   *
+   * @param trigger_name Name of the counter that "triggers" sample recording.
    * @param precision Precision of the event.
    * @return Sampler
    */
-  Sampler& trigger(std::string&& trigger_name, const Precision precision = Precision::Unspecified)
+  Sampler& trigger(std::string&& trigger_name, const Precision precision)
   {
     return trigger(
-      std::vector<std::pair<std::string, Precision>>{ std::make_pair(std::move(trigger_name), precision) });
+      std::vector<std::vector<Trigger>>{ std::vector<Trigger>{ Trigger{ std::move(trigger_name), precision } } });
+  }
+
+  /**
+   * Set the trigger for sampling to a single counter.
+   *
+   * @param trigger_name Name of the counter that "triggers" sample recording.
+   * @param period Sampling period of the event.
+   * @return Sampler
+   */
+  Sampler& trigger(std::string&& trigger_name, const class Period period)
+  {
+    return trigger(
+      std::vector<std::vector<Trigger>>{ std::vector<Trigger>{ Trigger{ std::move(trigger_name), period } } });
+  }
+
+  /**
+   * Set the trigger for sampling to a single counter.
+   *
+   * @param trigger_name Name of the counter that "triggers" sample recording.
+   * @param frequency Sampling frequency of the event.
+   * @return Sampler
+   */
+  Sampler& trigger(std::string&& trigger_name, const Frequency frequency)
+  {
+    return trigger(
+      std::vector<std::vector<Trigger>>{ std::vector<Trigger>{ Trigger{ std::move(trigger_name), frequency } } });
+  }
+
+  /**
+   * Set the trigger for sampling to a single counter.
+   *
+   * @param trigger_name Name of the counter that "triggers" sample recording.
+   * @param precision Precision of the event.
+   * @param period Sampling period of the event.
+   * @return Sampler
+   */
+  Sampler& trigger(std::string&& trigger_name, const Precision precision, const class Period period)
+  {
+    return trigger(std::vector<std::vector<Trigger>>{
+      std::vector<Trigger>{ Trigger{ std::move(trigger_name), precision, period } } });
+  }
+
+  /**
+   * Set the trigger for sampling to a single counter.
+   *
+   * @param trigger_name Name of the counter that "triggers" sample recording.
+   * @param precision Precision of the event.
+   * @param frequency Sampling frequency of the event.
+   * @return Sampler
+   */
+  Sampler& trigger(std::string&& trigger_name, const Precision precision, const Frequency frequency)
+  {
+    return trigger(std::vector<std::vector<Trigger>>{
+      std::vector<Trigger>{ Trigger{ std::move(trigger_name), precision, frequency } } });
   }
 
   /**
@@ -295,9 +439,9 @@ public:
    * @param triggers List of name-precision tuples that "trigger" sample recording.
    * @return Sampler
    */
-  Sampler& trigger(std::vector<std::pair<std::string, Precision>>&& triggers)
+  Sampler& trigger(std::vector<Trigger>&& triggers)
   {
-    return trigger(std::vector<std::vector<std::pair<std::string, Precision>>>{ std::move(triggers) });
+    return trigger(std::vector<std::vector<Trigger>>{ std::move(triggers) });
   }
 
   /**
@@ -318,7 +462,7 @@ public:
    * @param triggers Group of names and precisions of the counters that "trigger" sample recording.
    * @return Sampler
    */
-  Sampler& trigger(std::vector<std::vector<std::pair<std::string, Precision>>>&& triggers);
+  Sampler& trigger(std::vector<std::vector<Trigger>>&& triggers);
 
   /**
    * @return Configurations to enable values that will be sampled.
@@ -372,37 +516,148 @@ public:
   }
 
 private:
-  const CounterDefinition& _counter_definitions;
+  /**
+   * Represents a counter that is configured to somple;
+   * including the counter group (plus counter names) and the buffer
+   * user-level buffer that is used by the perf subsystem to store the samples.
+   */
+  class SampleCounter
+  {
+  public:
+    explicit SampleCounter(Group&& group)
+      : _group(std::move(group))
+    {
+    }
+    SampleCounter(Group&& group, std::vector<std::string_view>&& counter_names)
+      : _group(std::move(group))
+      , _counter_names(std::move(counter_names))
+    {
+    }
 
-  /// List of triggers. Each trigger will open an individual group of counters.
-  /// "Normally", a 1-dimensional list would be enough, but since Intel Sapphire Rapids,
-  /// we need auxiliary counters for mem-loads, mem-stores, etc.
-  std::vector<std::vector<std::pair<std::string_view, Precision>>> _trigger_names;
+    void buffer(void* buffer) noexcept { _buffer = buffer; }
 
-  /// Values to record into every sample.
-  Values _values;
+    [[nodiscard]] Group& group() noexcept { return _group; }
+    [[nodiscard]] const Group& group() const noexcept { return _group; }
+    [[nodiscard]] void* buffer() const noexcept { return _buffer; }
+    [[nodiscard]] const std::vector<std::string_view>& counter_names() const noexcept { return _counter_names; }
 
-  /// Perf config.
-  SampleConfig _config;
+  private:
+    /// Group including the leader that is responsible for sampling.
+    Group _group;
 
-  /// Groups of real counters to measure – will be filled when "opening" the sampler.
-  std::vector<class Group> _groups;
+    /// User-level, mmap-ed buffer that receives the samples by the perf subsystem.
+    void* _buffer{ nullptr };
 
-  /// Name of the counters to measure (per group).
-  /// Attention: Will be deprecated and stored within values.
-  std::vector<std::vector<std::string_view>> _counter_names;
+    /// List of counter names if counter values are sampled.
+    std::vector<std::string_view> _counter_names;
+  };
 
-  /// Buffers for the samples of every group.
-  std::vector<void*> _buffers;
+  /**
+   * The UserLevelBufferEntry represents an entry in the user-level buffer filled by the perf-subsystem by parsing the
+   * hardware-related samples. This helper assists in consuming data from the buffer and turning it into Samples.
+   */
+  class UserLevelBufferEntry
+  {
+  public:
+    UserLevelBufferEntry(perf_event_header* header) noexcept
+      : _head(std::uintptr_t(header + 1U))
+      , _misc(header->misc)
+      , _type(header->type)
+    {
+    }
+    ~UserLevelBufferEntry() noexcept = default;
 
-  /// Flag if the sampler is already opened, i.e., the events are configured.
-  /// This enables the user to open the sampler specifically – or open the
-  /// sampler when starting.
-  bool _is_opened{ false };
+    template<typename T>
+    [[nodiscard]] T read() noexcept
+    {
+      const auto data = *reinterpret_cast<T*>(_head);
+      _head += sizeof(T);
 
-  /// Will be assigned to errorno.
-  /// Attention: Will be deprecated when switching to exceptions only.
-  std::int64_t _last_error{ 0 };
+      return data;
+    }
+
+    template<typename T>
+    [[nodiscard]] const T* read(const std::size_t size) noexcept
+    {
+      auto* begin = reinterpret_cast<T*>(_head);
+      _head += sizeof(T) * size;
+
+      return begin;
+    }
+
+    template<typename T>
+    void skip() noexcept
+    {
+      _head += sizeof(T);
+    }
+
+    template<typename T>
+    void skip(const std::size_t size) noexcept
+    {
+      _head += sizeof(T) * size;
+    }
+
+    template<typename T>
+    T as() const noexcept
+    {
+      return reinterpret_cast<T>(_head);
+    }
+
+    [[nodiscard]] Sample::Mode mode() const noexcept;
+
+    [[nodiscard]] bool is_sample_event() const noexcept { return _type == PERF_RECORD_SAMPLE; }
+    [[nodiscard]] bool is_loss_event() const noexcept { return _type == PERF_RECORD_LOST_SAMPLES; }
+    [[nodiscard]] bool is_context_switch_event() const noexcept
+    {
+#ifndef PERFCPP_NO_RECORD_SWITCH
+      return _type == PERF_RECORD_SWITCH || _type == PERF_RECORD_SWITCH_CPU_WIDE;
+#else
+      return false;
+#endif
+    }
+    [[nodiscard]] bool is_context_switch_cpu_wide() const noexcept {
+#ifndef PERFCPP_NO_RECORD_SWITCH
+      return _type == PERF_RECORD_SWITCH_CPU_WIDE;
+#else
+      return false;
+#endif
+    }
+    [[nodiscard]] bool is_cgroup_event() const noexcept
+    {
+#ifndef PERFCPP_NO_RECORD_CGROUP
+      return _type == PERF_RECORD_CGROUP;
+#else
+      return false;
+#endif
+    }
+    [[nodiscard]] bool is_throttle_event() const noexcept
+    {
+      return _type == PERF_RECORD_THROTTLE || _type == PERF_RECORD_UNTHROTTLE;
+    }
+    [[nodiscard]] bool is_throttle() const noexcept { return _type == PERF_RECORD_THROTTLE; }
+
+    [[nodiscard]] bool is_exact_ip() const noexcept { return _misc & PERF_RECORD_MISC_EXACT_IP; }
+    [[nodiscard]] bool is_context_switch_out() const noexcept {
+#ifndef PERFCPP_NO_RECORD_SWITCH
+      return _misc & PERF_RECORD_MISC_SWITCH_OUT;
+#else
+      return false;
+#endif
+    }
+    [[nodiscard]] bool is_context_switch_out_preempt() const noexcept
+    {
+#ifndef PERFCPP_NO_RECORD_MISC_SWITCH_OUT_PREEMPT
+      return _misc & PERF_RECORD_MISC_SWITCH_OUT_PREEMPT;
+#else
+      return false;
+#endif
+    }
+
+  private:
+    std::uintptr_t _head;
+    const std::uint16_t _misc;
+    const std::uint32_t _type;
+  };
 
   /**
    * Read format for sampled counter values.
@@ -420,6 +675,85 @@ private:
     std::uint64_t count_members;
     std::array<value, Group::MAX_MEMBERS> values;
   };
+
+  /**
+   * Reads the sample_id struct from the data located at sample_ptr into the provided sample.
+   *
+   * @param sample Sample to read the data into.
+   */
+  void read_sample_id(UserLevelBufferEntry& entry, Sample& sample) const noexcept;
+
+  /**
+   * Translates the current entry from the user-level buffer into a "normal" sample.
+   *
+   * @param entry Entry of the user-level buffer.
+   * @param sample_counter The SampleCounter the entry is linked to in order to get the recorded counters (if any).
+   *
+   * @return Sample.
+   */
+  [[nodiscard]] perf::Sample read_sample_event(UserLevelBufferEntry entry, const SampleCounter& sample_counter) const;
+
+  /**
+   * Translates the current entry from the user-level buffer into a lost sample.
+   *
+   * @param entry Entry of the user-level buffer.
+   *
+   * @return Sample containing the loss.
+   */
+  [[nodiscard]] perf::Sample read_loss_event(UserLevelBufferEntry entry) const;
+
+  /**
+   * Translates the current entry from the user-level buffer into a context switch sample.
+   *
+   * @param entry Entry of the user-level buffer.
+   *
+   * @return Sample containing the context switch.
+   */
+  [[nodiscard]] perf::Sample read_context_switch_event(UserLevelBufferEntry entry) const;
+
+  /**
+   * Translates the current entry from the user-level buffer into a cgroup sample.
+   *
+   * @param entry Entry of the user-level buffer.
+   *
+   * @return Sample containing the cgroup.
+   */
+  [[nodiscard]] perf::Sample read_cgroup_event(UserLevelBufferEntry entry) const;
+
+  /**
+   * Translates the current entry from the user-level buffer into a throttle or unthrottle sample.
+   *
+   * @param entry Entry of the user-level buffer.
+   *
+   * @return Sample containing the throttle.
+   */
+  [[nodiscard]] perf::Sample read_throttle_event(UserLevelBufferEntry entry) const;
+
+  const CounterDefinition& _counter_definitions;
+
+  /// List of triggers. Each trigger will open an individual group of counters.
+  /// "Normally", a 1-dimensional list would be enough, but since Intel Sapphire Rapids,
+  /// we need auxiliary counters for mem-loads, mem-stores, etc.
+  std::vector<std::vector<std::tuple<std::string_view, std::optional<Precision>, std::optional<PeriodOrFrequency>>>>
+    _triggers;
+
+  /// Values to record into every sample.
+  Values _values;
+
+  /// Perf config.
+  SampleConfig _config;
+
+  /// List of counter groups used to sample – will be filled when "opening" the sampler.
+  std::vector<SampleCounter> _sample_counter;
+
+  /// Flag if the sampler is already opened, i.e., the events are configured.
+  /// This enables the user to open the sampler specifically – or open the
+  /// sampler when starting.
+  bool _is_opened{ false };
+
+  /// Will be assigned to errorno.
+  /// Attention: Will be deprecated when switching to exceptions only.
+  std::int64_t _last_error{ 0 };
 };
 
 class MultiSamplerBase
@@ -499,8 +833,7 @@ protected:
    * @param samplers List of samplers.
    * @param trigger_names List of triggers.
    */
-  static void trigger(std::vector<Sampler>& samplers,
-                      std::vector<std::vector<std::pair<std::string, Precision>>>&& triggers);
+  static void trigger(std::vector<Sampler>& samplers, std::vector<std::vector<Sampler::Trigger>>&& triggers);
 
   /**
    * Initializes the given sampler with values and config.
@@ -588,10 +921,63 @@ public:
    * @param trigger_name Name of the counter that "triggers" sample recording.
    * @return MultiThreadSampler
    */
-  MultiThreadSampler& trigger(std::string&& trigger_name, const Precision precision = Precision::Unspecified)
+  MultiThreadSampler& trigger(std::string&& trigger_name)
   {
-    return trigger(
-      std::vector<std::pair<std::string, Precision>>{ std::make_pair(std::move(trigger_name), precision) });
+    return trigger(std::vector<std::vector<Sampler::Trigger>>{
+      std::vector<Sampler::Trigger>{ Sampler::Trigger{ std::move(trigger_name) } } });
+  }
+
+  /**
+   * Set the trigger for sampling to a single counter.
+   *
+   * @param trigger_name Name of the counter that "triggers" sample recording.
+   * @param precision Precision of the event.
+   * @return MultiThreadSampler
+   */
+  MultiThreadSampler& trigger(std::string&& trigger_name, const Precision precision)
+  {
+    return trigger(std::vector<std::vector<Sampler::Trigger>>{
+      std::vector<Sampler::Trigger>{ Sampler::Trigger{ std::move(trigger_name), precision } } });
+  }
+
+  /**
+   * Set the trigger for sampling to a single counter.
+   *
+   * @param trigger_name Name of the counter that "triggers" sample recording.
+   * @param period Sampling period of the event.
+   * @return MultiThreadSampler
+   */
+  MultiThreadSampler& trigger(std::string&& trigger_name, const class Period period)
+  {
+    return trigger(std::vector<std::vector<Sampler::Trigger>>{
+      std::vector<Sampler::Trigger>{ Sampler::Trigger{ std::move(trigger_name), period } } });
+  }
+
+  /**
+   * Set the trigger for sampling to a single counter.
+   *
+   * @param trigger_name Name of the counter that "triggers" sample recording.
+   * @param frequency Sampling frequency of the event.
+   * @return MultiThreadSampler
+   */
+  MultiThreadSampler& trigger(std::string&& trigger_name, const Frequency frequency)
+  {
+    return trigger(std::vector<std::vector<Sampler::Trigger>>{
+      std::vector<Sampler::Trigger>{ Sampler::Trigger{ std::move(trigger_name), frequency } } });
+  }
+
+  /**
+   * Set the trigger for sampling to a single counter.
+   *
+   * @param trigger_name Name of the counter that "triggers" sample recording.
+   * @param precision Precision of the event.
+   * @param period Sampling period of the event.
+   * @return MultiThreadSampler
+   */
+  MultiThreadSampler& trigger(std::string&& trigger_name, const Precision precision, const class Period period)
+  {
+    return trigger(std::vector<std::vector<Sampler::Trigger>>{
+      std::vector<Sampler::Trigger>{ Sampler::Trigger{ std::move(trigger_name), precision, period } } });
   }
 
   /**
@@ -608,12 +994,12 @@ public:
   /**
    * Set the trigger for sampling to a list of different counters (e.g., mem loads and mem stores).
    *
-   * @param triggers List of name-precision tuples that "trigger" sample recording.
+   * @param triggers List of triggers tuples that "trigger" sample recording.
    * @return MultiThreadSampler
    */
-  MultiThreadSampler& trigger(std::vector<std::pair<std::string, Precision>>&& triggers)
+  MultiThreadSampler& trigger(std::vector<Sampler::Trigger>&& triggers)
   {
-    return trigger(std::vector<std::vector<std::pair<std::string, Precision>>>{ std::move(triggers) });
+    return trigger(std::vector<std::vector<Sampler::Trigger>>{ std::move(triggers) });
   }
 
   /**
@@ -638,7 +1024,7 @@ public:
    * @param triggers Group of names and precisions of the counters that "trigger" sample recording.
    * @return MultiThreadSampler
    */
-  MultiThreadSampler& trigger(std::vector<std::vector<std::pair<std::string, Precision>>>&& triggers)
+  MultiThreadSampler& trigger(std::vector<std::vector<Sampler::Trigger>>&& triggers)
   {
     MultiSamplerBase::trigger(_thread_local_samplers, std::move(triggers));
     return *this;
@@ -670,6 +1056,16 @@ public:
    */
   void stop(const std::uint16_t thread_id) { _thread_local_samplers[thread_id].stop(); }
 
+  /**
+   * Stops recording performance counters for all threads.
+   */
+  void stop()
+  {
+    for (auto& sampler : _thread_local_samplers) {
+      sampler.stop();
+    }
+  }
+
 private:
   std::vector<Sampler> _thread_local_samplers;
 
@@ -687,22 +1083,24 @@ private:
 class MultiCoreSampler final : public MultiSamplerBase
 {
 public:
-  [[deprecated("Creating samplers with counters and sampling type will be replaced by MultiCoreSampler::trigger() and "
-               "MultiCoreSampler::values() interfaces.")]] MultiCoreSampler(const CounterDefinition& counter_list,
-                                                                            const std::string& counter_name,
-                                                                            const std::uint64_t type,
-                                                                            std::vector<std::uint16_t>&& core_ids,
-                                                                            SampleConfig config = {})
+  [[deprecated(
+    "Creating samplers with counters and sampling type will be replaced by MultiCoreSampler::trigger() and "
+    "MultiCoreSampler::values() interfaces from v.0.9.0.")]] MultiCoreSampler(const CounterDefinition& counter_list,
+                                                                              const std::string& counter_name,
+                                                                              const std::uint64_t type,
+                                                                              std::vector<std::uint16_t>&& core_ids,
+                                                                              SampleConfig config = {})
     : MultiCoreSampler(counter_list, std::string{ counter_name }, type, std::move(core_ids), config)
   {
   }
 
-  [[deprecated("Creating samplers with counters and sampling type will be replaced by MultiCoreSampler::trigger() and "
-               "MultiCoreSampler::values() interfaces.")]] MultiCoreSampler(const CounterDefinition& counter_list,
-                                                                            std::string&& counter_name,
-                                                                            const std::uint64_t type,
-                                                                            std::vector<std::uint16_t>&& core_ids,
-                                                                            SampleConfig config = {})
+  [[deprecated(
+    "Creating samplers with counters and sampling type will be replaced by MultiCoreSampler::trigger() and "
+    "MultiCoreSampler::values() interfaces from v.0.9.0.")]] MultiCoreSampler(const CounterDefinition& counter_list,
+                                                                              std::string&& counter_name,
+                                                                              const std::uint64_t type,
+                                                                              std::vector<std::uint16_t>&& core_ids,
+                                                                              SampleConfig config = {})
     : MultiCoreSampler(counter_list,
                        std::vector<std::string>{ std::move(counter_name) },
                        type,
@@ -711,12 +1109,13 @@ public:
   {
   }
 
-  [[deprecated("Creating samplers with counters and sampling type will be replaced by MultiCoreSampler::trigger() and "
-               "MultiCoreSampler::values() interfaces.")]] MultiCoreSampler(const CounterDefinition& counter_list,
-                                                                            std::vector<std::string>&& counter_names,
-                                                                            std::uint64_t type,
-                                                                            std::vector<std::uint16_t>&& core_ids,
-                                                                            SampleConfig config = {});
+  [[deprecated(
+    "Creating samplers with counters and sampling type will be replaced by MultiCoreSampler::trigger() and "
+    "MultiCoreSampler::values() interfaces from v.0.9.0.")]] MultiCoreSampler(const CounterDefinition& counter_list,
+                                                                              std::vector<std::string>&& counter_names,
+                                                                              std::uint64_t type,
+                                                                              std::vector<std::uint16_t>&& core_ids,
+                                                                              SampleConfig config = {});
 
   explicit MultiCoreSampler(const CounterDefinition& counter_list,
                             std::vector<std::uint16_t>&& core_ids,
@@ -732,17 +1131,70 @@ public:
    * @param trigger_name Name of the counter that "triggers" sample recording.
    * @return MultiCoreSampler
    */
-  MultiCoreSampler& trigger(std::string&& trigger_name, const Precision precision = Precision::Unspecified)
+  MultiCoreSampler& trigger(std::string&& trigger_name)
   {
-    return trigger(
-      std::vector<std::pair<std::string, Precision>>{ std::make_pair(std::move(trigger_name), precision) });
+    return trigger(std::vector<std::vector<Sampler::Trigger>>{
+      std::vector<Sampler::Trigger>{ Sampler::Trigger{ std::move(trigger_name) } } });
+  }
+
+  /**
+   * Set the trigger for sampling to a single counter.
+   *
+   * @param trigger_name Name of the counter that "triggers" sample recording.
+   * @param precision Precision of the event.
+   * @return MultiCoreSampler
+   */
+  MultiCoreSampler& trigger(std::string&& trigger_name, const Precision precision)
+  {
+    return trigger(std::vector<std::vector<Sampler::Trigger>>{
+      std::vector<Sampler::Trigger>{ Sampler::Trigger{ std::move(trigger_name), precision } } });
+  }
+
+  /**
+   * Set the trigger for sampling to a single counter.
+   *
+   * @param trigger_name Name of the counter that "triggers" sample recording.
+   * @param period Sampling period of the event.
+   * @return MultiCoreSampler
+   */
+  MultiCoreSampler& trigger(std::string&& trigger_name, const class Period period)
+  {
+    return trigger(std::vector<std::vector<Sampler::Trigger>>{
+      std::vector<Sampler::Trigger>{ Sampler::Trigger{ std::move(trigger_name), period } } });
+  }
+
+  /**
+   * Set the trigger for sampling to a single counter.
+   *
+   * @param trigger_name Name of the counter that "triggers" sample recording.
+   * @param frequency Sampling frequency of the event.
+   * @return MultiCoreSampler
+   */
+  MultiCoreSampler& trigger(std::string&& trigger_name, const Frequency frequency)
+  {
+    return trigger(std::vector<std::vector<Sampler::Trigger>>{
+      std::vector<Sampler::Trigger>{ Sampler::Trigger{ std::move(trigger_name), frequency } } });
+  }
+
+  /**
+   * Set the trigger for sampling to a single counter.
+   *
+   * @param trigger_name Name of the counter that "triggers" sample recording.
+   * @param precision Precision of the event.
+   * @param period Sampling period of the event.
+   * @return MultiCoreSampler
+   */
+  MultiCoreSampler& trigger(std::string&& trigger_name, const Precision precision, const class Period period)
+  {
+    return trigger(std::vector<std::vector<Sampler::Trigger>>{
+      std::vector<Sampler::Trigger>{ Sampler::Trigger{ std::move(trigger_name), precision, period } } });
   }
 
   /**
    * Set the trigger for sampling to a list of different counters (e.g., mem loads and mem stores).
    *
    * @param trigger_name Name of the counters that "triggers" sample recording.
-   * @return MultiThreadSampler
+   * @return MultiCoreSampler
    */
   MultiCoreSampler& trigger(std::vector<std::string>&& trigger_names)
   {
@@ -752,12 +1204,12 @@ public:
   /**
    * Set the trigger for sampling to a list of different counters (e.g., mem loads and mem stores).
    *
-   * @param triggers List of name-precision tuples that "trigger" sample recording.
+   * @param triggers List of triggers tuples that "trigger" sample recording.
    * @return MultiCoreSampler
    */
-  MultiCoreSampler& trigger(std::vector<std::pair<std::string, Precision>>&& triggers)
+  MultiCoreSampler& trigger(std::vector<Sampler::Trigger>&& triggers)
   {
-    return trigger(std::vector<std::vector<std::pair<std::string, Precision>>>{ std::move(triggers) });
+    return trigger(std::vector<std::vector<Sampler::Trigger>>{ std::move(triggers) });
   }
 
   /**
@@ -766,7 +1218,7 @@ public:
    * for Intel's Sapphire Rapids architecture).
    *
    * @param trigger_name Group of names of the counters that "triggers" sample recording.
-   * @return MultiThreadSampler
+   * @return MultiCoreSampler
    */
   MultiCoreSampler& trigger(std::vector<std::vector<std::string>>&& trigger_names)
   {
@@ -782,7 +1234,7 @@ public:
    * @param triggers Group of names and precisions of the counters that "trigger" sample recording.
    * @return MultiCoreSampler
    */
-  MultiCoreSampler& trigger(std::vector<std::vector<std::pair<std::string, Precision>>>&& triggers)
+  MultiCoreSampler& trigger(std::vector<std::vector<Sampler::Trigger>>&& triggers)
   {
     MultiSamplerBase::trigger(_core_local_samplers, std::move(triggers));
     return *this;

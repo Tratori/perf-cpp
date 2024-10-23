@@ -25,11 +25,15 @@ public:
   ~CounterConfig() noexcept = default;
 
   void precise_ip(const std::uint8_t precise_ip) noexcept { _precise_ip = precise_ip; }
+  void period(const std::uint64_t period) noexcept { _is_frequency = false; _period_or_frequency = period; }
+  void frequency(const std::uint64_t frequency) noexcept { _is_frequency = true; _period_or_frequency = frequency; }
 
   [[nodiscard]] std::uint32_t type() const noexcept { return _type; }
   [[nodiscard]] std::uint64_t event_id() const noexcept { return _event_id; }
   [[nodiscard]] std::array<std::uint64_t, 2U> event_id_extension() const noexcept { return _event_id_extension; }
   [[nodiscard]] std::uint8_t precise_ip() const noexcept { return _precise_ip; }
+  [[nodiscard]] bool is_frequency() const noexcept { return _is_frequency; }
+  [[nodiscard]] std::uint64_t period_or_frequency() const noexcept { return _period_or_frequency; }
 
   [[nodiscard]] bool is_auxiliary() const noexcept { return _event_id == 0x8203; }
 
@@ -38,6 +42,8 @@ private:
   std::uint64_t _event_id;
   std::array<std::uint64_t, 2U> _event_id_extension;
   std::uint8_t _precise_ip{ 0U };
+  bool _is_frequency;
+  std::uint64_t _period_or_frequency;
 };
 
 class CounterResult
@@ -67,23 +73,6 @@ public:
    */
   [[nodiscard]] std::optional<double> get(std::string_view name) const noexcept;
 
-  /**
-   * Access the result of the counter or metric with the given name.
-   *
-   * @param name Name of the counter or metric to access.
-   * @return The value, or std::nullopt of the result has no counter or value with the requested name.
-   */
-  //[[nodiscard]] std::optional<double> get(const std::string& name) const noexcept { return
-  // get(std::string_view{name}); }
-
-  /**
-   * Access the result of the counter or metric with the given name.
-   *
-   * @param name Name of the counter or metric to access.
-   * @return The value, or std::nullopt of the result has no counter or value with the requested name.
-   */
-  //[[nodiscard]] std::optional<double> get(std::string&& name) const noexcept { return get(name); }
-
   [[nodiscard]] iterator begin() { return _results.begin(); }
   [[nodiscard]] iterator end() { return _results.end(); }
   [[nodiscard]] const_iterator begin() const { return _results.begin(); }
@@ -103,6 +92,12 @@ public:
    * @return Result in CSV format.
    */
   [[nodiscard]] std::string to_csv(char delimiter = ',', bool print_header = true) const;
+
+  /**
+   * Converts the result to a table-formatted string.
+   * @return Result as a table-formatted string.
+   */
+  [[nodiscard]] std::string to_string() const;
 
 private:
   std::vector<std::pair<std::string_view, double>> _results;
@@ -127,6 +122,9 @@ public:
   void precise_ip(const std::uint8_t precision) { _config.precise_ip(precision); }
   [[nodiscard]] std::uint8_t precise_ip() const noexcept { return _config.precise_ip(); }
 
+  [[nodiscard]] bool is_frequency() const noexcept { return _config.is_frequency(); }
+  [[nodiscard]] std::uint64_t period_or_frequency() const noexcept { return _config.period_or_frequency(); }
+
   [[nodiscard]] perf_event_attr& event_attribute() noexcept { return _event_attribute; }
   [[nodiscard]] std::uint64_t& id() noexcept { return _id; }
   [[nodiscard]] std::uint64_t id() const noexcept { return _id; }
@@ -144,5 +142,21 @@ private:
   perf_event_attr _event_attribute{};
   std::uint64_t _id{ 0U };
   std::int64_t _file_descriptor{ -1 };
+
+  /**
+   * Prints a name of a type (e.g., sample, branch, ...) to the stream if the type is set in the mask.
+   *
+   * @param stream Stream to print the name of the type on.
+   * @param mask Given mask to check if the type is set.
+   * @param type Type to test in the mask.
+   * @param name Name to print if the type is set.
+   * @param is_first Flag if this is the first printed name. If false, a separator is printed in front of the name.
+   * @return True, if this was the first printed type.
+   */
+  static bool print_type_to_stream(std::stringstream& stream,
+                                   std::uint64_t mask,
+                                   std::uint64_t type,
+                                   std::string&& name,
+                                   bool is_first);
 };
 }
